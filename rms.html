@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive RMS Scheduling Simulation</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 0; background: #f0f0f0; }
+header { background: #1e88e5; color: white; padding: 20px; text-align: center; }
+.controls { background: #fff; padding: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.controls label { margin-right: 5px; }
+button { padding: 8px 12px; border: none; border-radius: 5px; background: #1e88e5; color: white; cursor: pointer; }
+button:hover { background: #1565c0; }
+#simulationArea { padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+.task-card { padding: 10px; border-radius: 5px; color: white; font-weight: bold; min-width: 150px; text-align: center; display: flex; flex-direction: column; gap: 5px; }
+.running { background: #2196F3; }
+.waiting { background: #FF9800; }
+.completed { background: #4CAF50; }
+.preempted { background: #f44336; }
+.progress-bar { height: 15px; background: rgba(255,255,255,0.3); border-radius: 5px; overflow: hidden; }
+.progress { height: 100%; background: white; width: 0%; }
+.timeline { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; }
+.timeline div { width: 20px; height: 20px; border-radius: 3px; }
+.stats { margin-top: 20px; background: #fff; padding: 15px; border-radius: 5px; }
+.log { background: #222; color: #0f0; padding: 10px; max-height: 200px; overflow-y: auto; border-radius: 5px; font-family: monospace; }
+input[type=number] { width: 60px; padding: 5px; }
+</style>
+</head>
+<body>
+<header>
+<h1>Interactive Rate Monotonic Scheduling Simulation</h1>
+</header>
+<div class="controls">
+<label for="taskCount">Tasks:</label>
+<input type="number" id="taskCount" min="2" max="10" value="4">
+<label for="speed">Speed:</label>
+<select id="speed">
+<option value="1">Very Slow</option>
+<option value="2">Slow</option>
+<option value="3" selected>Normal</option>
+<option value="4">Fast</option>
+<option value="5">Very Fast</option>
+</select>
+<button id="startBtn">Start</button>
+<button id="pauseBtn">Pause</button>
+<button id="resetBtn">Reset</button>
+</div>
+<div id="simulationArea"></div>
+<div class="stats" id="stats"></div>
+<div class="log" id="log"></div>
+<script>
+let tasks = [];
+let timeline = [];
+let interval = null;
+let paused = false;
+function logEvent(msg) { const log = document.getElementById('log'); log.innerHTML += `[${new Date().toLocaleTimeString()}] ${msg}<br>`; log.scrollTop = log.scrollHeight; }
+function createTasks() {
+    tasks = [];
+    const taskCount = parseInt(document.getElementById('taskCount').value);
+    for(let i=0;i<taskCount;i++){
+        let burst = Math.floor(Math.random()*5)+1;
+        tasks.push({ id: i+1, period: (i+1)*2, burst: burst, remaining: burst, state: 'waiting', progress: 0 });
+    }
+}
+function renderTasks(){
+    const sim = document.getElementById('simulationArea');
+    sim.innerHTML='';
+    tasks.forEach(task=>{
+        const div = document.createElement('div');
+        div.className='task-card '+task.state;
+        div.innerHTML=`<div>Task-${task.id} (Period: ${task.period})</div><div class='progress-bar'><div class='progress' style='width:${(task.progress/task.burst)*100}%'></div></div>`;
+        sim.appendChild(div);
+    });
+}
+function updateStats(){
+    const statsDiv = document.getElementById('stats');
+    const running = tasks.filter(t=>t.state==='running').length;
+    const waiting = tasks.filter(t=>t.state==='waiting').length;
+    const preempted = tasks.filter(t=>t.state==='preempted').length;
+    const completed = tasks.filter(t=>t.state==='completed').length;
+    statsDiv.innerHTML=`Running: ${running} | Waiting: ${waiting} | Preempted: ${preempted} | Completed: ${completed}`;
+}
+function rmsStep(){
+    const readyTasks = tasks.filter(t=>t.state==='waiting' && t.remaining>0);
+    if(readyTasks.length===0) return;
+    readyTasks.sort((a,b)=>a.period-b.period);
+    const nextTask = readyTasks[0];
+    tasks.forEach(t=>{ if(t.state==='running' && t.id!==nextTask.id) t.state='preempted'; });
+    nextTask.state='running';
+    nextTask.remaining--;
+    nextTask.progress++;
+    logEvent(`Task-${nextTask.id} is running, remaining burst: ${nextTask.remaining}`);
+    tasks.forEach(t=>{if(t.remaining===0) t.state='completed'});
+    renderTasks();
+    updateStats();
+}
+document.getElementById('startBtn').addEventListener('click',()=>{
+    createTasks();
+    renderTasks();
+    updateStats();
+    clearInterval(interval);
+    paused=false;
+    const speedFactor = parseInt(document.getElementById('speed').value);
+    interval = setInterval(()=>{if(!paused) rmsStep();}, 1000/(speedFactor));
+});
+document.getElementById('pauseBtn').addEventListener('click',()=>{ paused=!paused; document.getElementById('pauseBtn').innerText = paused?'Resume':'Pause'; });
+document.getElementById('resetBtn').addEventListener('click',()=>{ clearInterval(interval); tasks=[]; renderTasks(); updateStats(); document.getElementById('log').innerHTML=''; paused=false; document.getElementById('pauseBtn').innerText='Pause'; });
+</script>
+</body>
+</html>
